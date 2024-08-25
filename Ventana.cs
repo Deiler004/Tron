@@ -21,7 +21,7 @@ namespace Tron
         private Label lblTiempo;
         private int tiempoJuego; // Tiempo de juego en segundos
         private List<Point> posicionesPrevias; // Lista para almacenar posiciones previas de los enemigos
-
+        private List<PictureBox> llamasRecientes;
 
         public Ventana()
         {
@@ -31,6 +31,9 @@ namespace Tron
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
+
+            // Inicializar la lista de llamas recientes
+            llamasRecientes = new List<PictureBox>();
 
             random = new Random();
             enemigos = new List<PictureBox>();
@@ -45,7 +48,7 @@ namespace Tron
                 PictureBox enemigoPictureBox = new PictureBox();
                 enemigoPictureBox.Image = Image.FromFile("Enemigo_abajo.png");
                 enemigoPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
-                enemigoPictureBox.Size = new Size(50, 50);
+                enemigoPictureBox.Size = new Size(20, 20);
                 enemigoPictureBox.Location = new Point(random.Next(0, this.ClientSize.Width - 50),
                                                       random.Next(0, this.ClientSize.Height - 50));
 
@@ -80,7 +83,7 @@ namespace Tron
 
             // Timer para cambiar la dirección de los enemigos
             cambioDireccionTimer = new System.Windows.Forms.Timer();
-            cambioDireccionTimer.Interval = 900;
+            cambioDireccionTimer.Interval = 3000;
             cambioDireccionTimer.Tick += new EventHandler((sender, e) => {
                 for (int i = 0; i < enemigos.Count; i++)
                 {
@@ -103,28 +106,62 @@ namespace Tron
             });
             fuegoTimer.Start();
         }
-        private void ColocarLlama(Point posicion)
+        private void ColocarLlama(Point posicion, bool esMovimientoVertical)
         {
-            PictureBox llamaPictureBox = new PictureBox();
-            llamaPictureBox.Image = Image.FromFile("Llama.png");
-            llamaPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
-            llamaPictureBox.Size = new Size(8, 8);
-            llamaPictureBox.Location = posicion;
-
-            llamas.Add(llamaPictureBox);
-            this.Controls.Add(llamaPictureBox);
-            llamaPictureBox.SendToBack(); // Asegurar que la llama quede detrás del enemigo
-
-            var eliminarLlamaTimer = new System.Windows.Forms.Timer();
-            eliminarLlamaTimer.Interval = duracionLlama;
-            eliminarLlamaTimer.Tick += (s, e) =>
+            var delayTimer = new System.Windows.Forms.Timer();
+            delayTimer.Interval = 100; // Retraso en milisegundos (ajusta este valor según sea necesario)
+            delayTimer.Tick += (s, e) =>
             {
-                this.Controls.Remove(llamaPictureBox);
-                llamas.Remove(llamaPictureBox);
-                eliminarLlamaTimer.Stop();
-                eliminarLlamaTimer.Dispose();
+                PictureBox llamaPictureBox = new PictureBox();
+
+                // Cambiar la imagen según la dirección del movimiento
+                if (esMovimientoVertical)
+                {
+                    llamaPictureBox.Image = Image.FromFile("LlamaVertical.png");
+                }
+                else
+                {
+                    llamaPictureBox.Image = Image.FromFile("LlamaHorizontal.png");
+                }
+
+                llamaPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+                llamaPictureBox.Size = new Size(8, 8);
+
+                // Colocar la llama en la posición proporcionada
+                llamaPictureBox.Location = posicion;
+
+                llamas.Add(llamaPictureBox);
+                llamasRecientes.Add(llamaPictureBox); // Agregar la llama a la lista de llamas recientes
+                this.Controls.Add(llamaPictureBox);
+                llamaPictureBox.SendToBack(); // Asegurar que la llama quede detrás del enemigo
+
+                // Eliminar la llama de las recientes después de un intervalo
+                var removerLlamaRecienteTimer = new System.Windows.Forms.Timer();
+                removerLlamaRecienteTimer.Interval = 500; // Tiempo para considerar la llama como "no reciente"
+                removerLlamaRecienteTimer.Tick += (s2, e2) =>
+                {
+                    llamasRecientes.Remove(llamaPictureBox);
+                    removerLlamaRecienteTimer.Stop();
+                    removerLlamaRecienteTimer.Dispose();
+                };
+                removerLlamaRecienteTimer.Start();
+
+                // Configurar temporizador para eliminar la llama
+                var eliminarLlamaTimer = new System.Windows.Forms.Timer();
+                eliminarLlamaTimer.Interval = duracionLlama;
+                eliminarLlamaTimer.Tick += (s3, e3) =>
+                {
+                    this.Controls.Remove(llamaPictureBox);
+                    llamas.Remove(llamaPictureBox);
+                    eliminarLlamaTimer.Stop();
+                    eliminarLlamaTimer.Dispose();
+                };
+                eliminarLlamaTimer.Start();
+
+                delayTimer.Stop();
+                delayTimer.Dispose();
             };
-            eliminarLlamaTimer.Start();
+            delayTimer.Start();
         }
 
 
@@ -138,31 +175,80 @@ namespace Tron
             }
         }
 
+
+
+
+
+
+
         private void MoverEnemigos(object sender, EventArgs e)
         {
+            // Crear una lista temporal para almacenar los enemigos que deben ser eliminados
+            List<int> enemigosAEliminar = new List<int>();
+
             for (int i = 0; i < enemigos.Count; i++)
             {
                 PictureBox enemigo = enemigos[i];
                 Point direccion = direcciones[i];
 
-                Point nuevaPosicion = new Point(enemigo.Left + direccion.X * enemigoVelocidad,
-                                                enemigo.Top + direccion.Y * enemigoVelocidad);
+                // Guardar la posición actual del enemigo antes de moverlo
+                Point posicionAnterior = enemigo.Location;
+
+                // Calcular la nueva posición
+                Point nuevaPosicion = new Point(
+                    enemigo.Left + direccion.X * enemigoVelocidad,
+                    enemigo.Top + direccion.Y * enemigoVelocidad
+                );
 
                 Rectangle nuevoRect = new Rectangle(nuevaPosicion, enemigo.Size);
 
                 if (this.ClientRectangle.Contains(nuevoRect))
                 {
-                    // Colocar la llama en la posición previa del enemigo
-                    ColocarLlama(posicionesPrevias[i]);
-
                     enemigo.Location = nuevaPosicion;
-                    posicionesPrevias[i] = nuevaPosicion; // Actualizar la posición previa
+
+                    // Determinar si el movimiento es vertical u horizontal
+                    bool esMovimientoVertical = direccion.Y != 0;
+
+                    // Colocar la llama en la posición anterior del enemigo
+                    ColocarLlama(posicionAnterior, esMovimientoVertical);
+
+                    // Verificar colisión con otros enemigos
+                    for (int j = 0; j < enemigos.Count; j++)
+                    {
+                        if (i != j && enemigo.Bounds.IntersectsWith(enemigos[j].Bounds))
+                        {
+                            enemigosAEliminar.Add(i);
+                            enemigosAEliminar.Add(j);
+                        }
+                    }
+
+                    // Verificar colisión con llamas, excluyendo las llamas recientes
+                    foreach (var llama in llamas)
+                    {
+                        if (!llamasRecientes.Contains(llama) && enemigo.Bounds.IntersectsWith(llama.Bounds))
+                        {
+                            enemigosAEliminar.Add(i);
+                            break; // No es necesario seguir comprobando más llamas si ya hay una colisión
+                        }
+                    }
                 }
                 else
                 {
                     CambiarDireccion(i);
                 }
             }
+
+            // Eliminar enemigos que colisionaron
+            enemigosAEliminar = enemigosAEliminar.Distinct().ToList(); // Eliminar duplicados
+            enemigosAEliminar.Sort((a, b) => b.CompareTo(a)); // Ordenar de mayor a menor para evitar problemas al eliminar
+
+            foreach (int index in enemigosAEliminar)
+            {
+                this.Controls.Remove(enemigos[index]);
+                enemigos.RemoveAt(index);
+                direcciones.RemoveAt(index);
+            }
+
             this.Invalidate(); // Forzar repintado del formulario
         }
 
