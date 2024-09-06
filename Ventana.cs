@@ -24,6 +24,9 @@ namespace Tron
         private int tiempoJuego;
         private List<Point> posicionesPrevias;
         private List<PictureBox> llamasRecientes;
+        private List<Point> nodos;
+        private List<PictureBox> bombas;  // Lista de bombas
+
 
         public Ventana()
         {
@@ -43,6 +46,18 @@ namespace Tron
             posicionesPrevias = new List<Point>();
 
             enemigoVelocidad = random.Next(1, 11);
+            bombas = new List<PictureBox>();
+
+
+
+            var bombaTimer = new System.Windows.Forms.Timer();
+            bombaTimer.Interval = 10000; // Cada 10 segundos, ajusta este valor según sea necesario
+            bombaTimer.Tick += (s, e) => ColocarBomba();
+            bombaTimer.Start();
+
+
+
+
 
             // Inicializar el jugador
             jugadorMoto = new PictureBox();
@@ -111,9 +126,78 @@ namespace Tron
             });
             fuegoTimer.Start();
 
+            // Inicializar nodos del mapa
+            nodos = new List<Point>();
+
+            int gridSize = 100; // Tamaño de la cuadrícula
+            for (int x = 0; x < this.ClientSize.Width; x += gridSize)
+            {
+                for (int y = 0; y < this.ClientSize.Height; y += gridSize)
+                {
+                    nodos.Add(new Point(x, y));
+                }
+            }
+
             // Añadir el evento de teclado para controlar el jugador
             this.KeyDown += new KeyEventHandler(Ventana_KeyDown);
         }
+
+
+
+
+        // Función para encontrar el nodo más cercano a una posición actual
+        private Point NodoMasCercano(Point posicionActual)
+        {
+            Point nodoCercano = nodos[0];
+            double distanciaMinima = DistanciaEntrePuntos(posicionActual, nodos[0]);
+
+            foreach (var nodo in nodos)
+            {
+                double distancia = DistanciaEntrePuntos(posicionActual, nodo);
+                if (distancia < distanciaMinima)
+                {
+                    nodoCercano = nodo;
+                    distanciaMinima = distancia;
+                }
+            }
+
+            return nodoCercano;
+        }
+
+        // Función para calcular la distancia entre dos puntos
+        private double DistanciaEntrePuntos(Point p1, Point p2)
+        {
+            return Math.Sqrt(Math.Pow(p1.X - p2.X, 2) + Math.Pow(p1.Y - p2.Y, 2));
+        }
+
+
+        private void ColocarBomba()
+        {
+            PictureBox bomba = new PictureBox();
+            bomba.Image = Image.FromFile("bomba.png"); // Ruta de la imagen de la bomba
+            bomba.SizeMode = PictureBoxSizeMode.StretchImage;
+            bomba.Size = new Size(20, 20);
+
+            // Colocar en una ubicación aleatoria
+            bomba.Location = new Point(random.Next(0, this.ClientSize.Width - bomba.Width), random.Next(0, this.ClientSize.Height - bomba.Height));
+
+            bombas.Add(bomba);
+            this.Controls.Add(bomba);
+
+            // Timer para eliminar la bomba después de un tiempo si no se toca
+            var eliminarBombaTimer = new System.Windows.Forms.Timer();
+            eliminarBombaTimer.Interval = 5000; // 5 segundos, ajusta este valor según sea necesario
+            eliminarBombaTimer.Tick += (s, e) =>
+            {
+                this.Controls.Remove(bomba);
+                bombas.Remove(bomba);
+                eliminarBombaTimer.Stop();
+                eliminarBombaTimer.Dispose();
+            };
+            eliminarBombaTimer.Start();
+        }
+
+
 
         private void ColocarLlama(Point posicion, bool esMovimientoVertical)
         {
@@ -178,8 +262,6 @@ namespace Tron
                 PictureBox enemigo = enemigos[i];
                 Point direccion = direcciones[i];
 
-                Point posicionAnterior = enemigo.Location;
-
                 Point nuevaPosicion = new Point(
                     enemigo.Left + direccion.X * enemigoVelocidad,
                     enemigo.Top + direccion.Y * enemigoVelocidad
@@ -193,7 +275,7 @@ namespace Tron
 
                     bool esMovimientoVertical = direccion.Y != 0;
 
-                    ColocarLlama(posicionAnterior, esMovimientoVertical);
+                    ColocarLlama(enemigo.Location, esMovimientoVertical);
 
                     for (int j = 0; j < enemigos.Count; j++)
                     {
@@ -215,20 +297,23 @@ namespace Tron
                 }
                 else
                 {
-                    CambiarDireccion(i);
+                    CambiarDireccion(i); // Cambia la dirección si el enemigo está fuera del área visible
                 }
             }
 
-            MoverJugador();
+            MoverJugador(); // Asegúrate de que el jugador se mueve en cada tick
 
             enemigosAEliminar = enemigosAEliminar.Distinct().ToList();
             enemigosAEliminar.Sort((a, b) => b.CompareTo(a));
 
             foreach (int index in enemigosAEliminar)
             {
-                this.Controls.Remove(enemigos[index]);
-                enemigos.RemoveAt(index);
-                direcciones.RemoveAt(index);
+                if (index >= 0 && index < enemigos.Count) // Asegúrate de que el índice sea válido
+                {
+                    this.Controls.Remove(enemigos[index]);
+                    enemigos.RemoveAt(index);
+                    direcciones.RemoveAt(index);
+                }
             }
 
             this.Invalidate();
@@ -255,6 +340,7 @@ namespace Tron
 
                 List<PictureBox> enemigosAEliminar = new List<PictureBox>();
                 List<PictureBox> llamasAEliminar = new List<PictureBox>();
+                List<PictureBox> bombasAEliminar = new List<PictureBox>(); // Lista para bombas
 
                 foreach (var enemigo in enemigos)
                 {
@@ -272,7 +358,17 @@ namespace Tron
                     }
                 }
 
-                if (enemigosAEliminar.Count > 0 || llamasAEliminar.Count > 0)
+                foreach (var bomba in bombas) // Verificar colisión con bombas
+                {
+                    if (jugadorMoto.Bounds.IntersectsWith(bomba.Bounds))
+                    {
+                        bombasAEliminar.Add(bomba);
+                        MessageBox.Show("¡Bomba explotada! Fin del juego.");
+                        Application.Exit(); // Cerrar la aplicación, puedes reemplazarlo con la lógica que prefieras
+                    }
+                }
+
+                if (enemigosAEliminar.Count > 0 || llamasAEliminar.Count > 0 || bombasAEliminar.Count > 0)
                 {
                     // Detener el juego y mostrar un solo mensaje de colisión
                     enemigoMovimientoTimer.Stop();
@@ -280,16 +376,7 @@ namespace Tron
                     fuegoTimer.Stop();
                     juegoTimer.Stop();
 
-                    if (enemigosAEliminar.Count > 0)
-                    {
-                        MessageBox.Show("¡Colisión con enemigo! Fin del juego.");
-                    }
-                    else if (llamasAEliminar.Count > 0)
-                    {
-                        MessageBox.Show("¡Colisión con llama! Fin del juego.");
-                    }
-
-                    // Eliminar enemigos y llamas colisionadas
+                    // Eliminar enemigos, llamas y bombas colisionadas
                     foreach (var enemigo in enemigosAEliminar)
                     {
                         this.Controls.Remove(enemigo);
@@ -300,6 +387,12 @@ namespace Tron
                     {
                         this.Controls.Remove(llama);
                         llamas.Remove(llama);
+                    }
+
+                    foreach (var bomba in bombasAEliminar)
+                    {
+                        this.Controls.Remove(bomba);
+                        bombas.Remove(bomba);
                     }
 
                     Application.Exit(); // Cerrar la aplicación
