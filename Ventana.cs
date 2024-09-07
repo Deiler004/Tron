@@ -26,6 +26,9 @@ namespace Tron
         private List<PictureBox> llamasRecientes;
         private List<Point> nodos;
         private List<PictureBox> bombas;  // Lista de bombas
+        private int cantidadCombustible; // Cantidad total de combustible
+        private int consumoCombustible; // Cantidad de combustible consumido por segundo
+        private Panel barraCombustible; // Panel para la barra de combustible
 
 
         public Ventana()
@@ -37,27 +40,47 @@ namespace Tron
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
 
-            llamasRecientes = new List<PictureBox>();
 
+
+
+
+            // Inicializar variables de combustible
+            cantidadCombustible = 100; // Valor inicial de combustible
+            consumoCombustible = 1; // Cantidad de combustible consumido por segundo
+
+            // Crear y configurar la barra de combustible
+            barraCombustible = new Panel();
+            barraCombustible.BackColor = Color.Red;
+            barraCombustible.Size = new Size(200, 20); // Ajusta el tamaño según sea necesario
+            barraCombustible.Location = new Point(10, 40); // Ajusta la ubicación según sea necesario
+            this.Controls.Add(barraCombustible);
+
+
+
+
+
+
+
+
+            llamasRecientes = new List<PictureBox>();
             random = new Random();
             enemigos = new List<PictureBox>();
             llamas = new List<PictureBox>();
             direcciones = new List<Point>();
             posicionesPrevias = new List<Point>();
-
-            enemigoVelocidad = random.Next(1, 11);
             bombas = new List<PictureBox>();
-
-
+            enemigoVelocidad = random.Next(1, 11);
 
             var bombaTimer = new System.Windows.Forms.Timer();
-            bombaTimer.Interval = 10000; // Cada 10 segundos, ajusta este valor según sea necesario
+            bombaTimer.Interval = 5000; // Cada 10 segundos, ajusta este valor según sea necesario
             bombaTimer.Tick += (s, e) => ColocarBomba();
             bombaTimer.Start();
 
-
-
-
+            // Añadir temporizador para colocar gasolina
+            var gasolinaTimer = new System.Windows.Forms.Timer();
+            gasolinaTimer.Interval = 5000; // Cada 15 segundos se libera la gasolina
+            gasolinaTimer.Tick += (s, e) => ColocarGasolina();
+            gasolinaTimer.Start();
 
             // Inicializar el jugador
             jugadorMoto = new PictureBox();
@@ -196,6 +219,42 @@ namespace Tron
             };
             eliminarBombaTimer.Start();
         }
+
+
+
+
+
+
+
+        private void ColocarGasolina()
+        {
+            PictureBox gasolina = new PictureBox();
+            gasolina.Image = Image.FromFile("Gasolina.png"); // Ruta de la imagen de gasolina
+            gasolina.SizeMode = PictureBoxSizeMode.StretchImage;
+            gasolina.Size = new Size(20, 20); // Ajusta el tamaño según sea necesario
+
+            // Colocar en una ubicación aleatoria
+            gasolina.Location = new Point(random.Next(0, this.ClientSize.Width - gasolina.Width), random.Next(0, this.ClientSize.Height - gasolina.Height));
+
+            this.Controls.Add(gasolina);
+
+            // Timer para eliminar la gasolina después de un tiempo si no se recoge
+            var eliminarGasolinaTimer = new System.Windows.Forms.Timer();
+            eliminarGasolinaTimer.Interval = 10000; // 10 segundos, ajusta este valor según sea necesario
+            eliminarGasolinaTimer.Tick += (s, e) =>
+            {
+                this.Controls.Remove(gasolina);
+                eliminarGasolinaTimer.Stop();
+                eliminarGasolinaTimer.Dispose();
+            };
+            eliminarGasolinaTimer.Start();
+        }
+
+
+
+
+
+
 
 
 
@@ -362,9 +421,21 @@ namespace Tron
                 {
                     if (jugadorMoto.Bounds.IntersectsWith(bomba.Bounds))
                     {
+                        // Detener todos los temporizadores
+                        enemigoMovimientoTimer.Stop();
+                        cambioDireccionTimer.Stop();
+                        fuegoTimer.Stop();
+                        juegoTimer.Stop();
+
                         bombasAEliminar.Add(bomba);
+
+                        // Mostrar un solo mensaje
                         MessageBox.Show("¡Bomba explotada! Fin del juego.");
-                        Application.Exit(); // Cerrar la aplicación, puedes reemplazarlo con la lógica que prefieras
+
+                        // Cerrar la aplicación, puedes reemplazarlo con la lógica que prefieras
+                        Application.Exit();
+
+                        return; // Salir de la función para evitar mostrar múltiples mensajes
                     }
                 }
 
@@ -400,6 +471,18 @@ namespace Tron
             }
         }
 
+
+
+
+
+
+
+
+
+
+
+
+
         private void CambiarDireccion(int index)
         {
             int nuevaDireccion;
@@ -415,6 +498,28 @@ namespace Tron
 
         private void Ventana_KeyDown(object sender, KeyEventArgs e)
         {
+            // Verifica la dirección actual del jugador
+            if (direccionJugador.X == 1 && direccionJugador.Y == 0) // Derecha
+            {
+                if (e.KeyCode == Keys.Left) // No permitir moverse a la izquierda
+                    return;
+            }
+            else if (direccionJugador.X == -1 && direccionJugador.Y == 0) // Izquierda
+            {
+                if (e.KeyCode == Keys.Right) // No permitir moverse a la derecha
+                    return;
+            }
+            else if (direccionJugador.X == 0 && direccionJugador.Y == 1) // Abajo
+            {
+                if (e.KeyCode == Keys.Up) // No permitir moverse hacia arriba
+                    return;
+            }
+            else if (direccionJugador.X == 0 && direccionJugador.Y == -1) // Arriba
+            {
+                if (e.KeyCode == Keys.Down) // No permitir moverse hacia abajo
+                    return;
+            }
+
             switch (e.KeyCode)
             {
                 case Keys.Up:
