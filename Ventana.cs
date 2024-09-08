@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 
+
 namespace Tron
 {
     public class Ventana : Form
@@ -29,6 +30,18 @@ namespace Tron
         private int cantidadCombustible; // Cantidad total de combustible
         private int consumoCombustible; // Cantidad de combustible consumido por segundo
         private Panel barraCombustible; // Panel para la barra de combustible
+        private List<PictureBox> escudos;
+        private System.Windows.Forms.Timer generarEscudoTimer;
+        private List<PictureBox> itemsVelocidad = new List<PictureBox>();
+
+
+
+
+
+
+
+
+
 
 
         public Ventana()
@@ -41,6 +54,13 @@ namespace Tron
             this.MaximizeBox = false;
 
 
+            escudos = new List<PictureBox>();
+            // Ejemplo de cómo crear un escudo
+            configurarTimerEscudo();
+            // Configurar y empezar el timer para actualizar el juego regularmente
+            configurarTimerActualizacion();
+
+
 
 
 
@@ -51,12 +71,22 @@ namespace Tron
             // Crear y configurar la barra de combustible
             barraCombustible = new Panel();
             barraCombustible.BackColor = Color.Red;
-            barraCombustible.Size = new Size(200, 20); // Ajusta el tamaño según sea necesario
-            barraCombustible.Location = new Point(10, 40); // Ajusta la ubicación según sea necesario
+            barraCombustible.Size = new Size(200, 20); // Ancho inicial de la barra
+            barraCombustible.Location = new Point(10, 40);
             this.Controls.Add(barraCombustible);
 
+            // Crear un temporizador para el consumo de combustible
+            var combustibleTimer = new System.Windows.Forms.Timer();
+            combustibleTimer.Interval = 1000; // Cada segundo
+            combustibleTimer.Tick += (s, e) => ConsumirCombustible();
+            combustibleTimer.Start();
 
 
+
+            itemsVelocidad = new List<PictureBox>();
+
+
+            ColocarItemVelocidad();
 
 
 
@@ -69,7 +99,14 @@ namespace Tron
             direcciones = new List<Point>();
             posicionesPrevias = new List<Point>();
             bombas = new List<PictureBox>();
-            enemigoVelocidad = random.Next(1, 11);
+            enemigoVelocidad = random.Next(3, 13);    //velociedad de los enemigos y jugadores
+
+
+
+
+
+
+
 
             var bombaTimer = new System.Windows.Forms.Timer();
             bombaTimer.Interval = 5000; // Cada 10 segundos, ajusta este valor según sea necesario
@@ -78,7 +115,7 @@ namespace Tron
 
             // Añadir temporizador para colocar gasolina
             var gasolinaTimer = new System.Windows.Forms.Timer();
-            gasolinaTimer.Interval = 5000; // Cada 15 segundos se libera la gasolina
+            gasolinaTimer.Interval = 5000; // Cada 5 segundos se libera la gasolina
             gasolinaTimer.Tick += (s, e) => ColocarGasolina();
             gasolinaTimer.Start();
 
@@ -163,7 +200,86 @@ namespace Tron
 
             // Añadir el evento de teclado para controlar el jugador
             this.KeyDown += new KeyEventHandler(Ventana_KeyDown);
+
+
+
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+        private void configurarTimerEscudo()
+        {
+            generarEscudoTimer = new System.Windows.Forms.Timer();
+            generarEscudoTimer.Interval = 10000; // Intervalo en milisegundos para crear un nuevo escudo (ejemplo: cada 10 segundos)
+            generarEscudoTimer.Tick += (s, e) => CrearEscudo();
+            generarEscudoTimer.Start();
+        }
+
+        private void CrearEscudo()
+        {
+            Escudo escudo = new Escudo(this, escudos);
+        }
+
+
+
+
+
+        // Configurar y empezar un Timer para actualizar el juego regularmente
+        private void configurarTimerActualizacion()
+        {
+            var actualizacionJuegoTimer = new System.Windows.Forms.Timer();
+            actualizacionJuegoTimer.Interval = 100; // Intervalo de actualización en milisegundos (ejemplo: cada 100 ms)
+            actualizacionJuegoTimer.Tick += (s, e) => ActualizarJuego();
+            actualizacionJuegoTimer.Start();
+        }
+
+
+
+
+
+        // Variable para indicar si el jugador es inmune
+        private bool esInmune = false;
+
+        // Método para verificar colisiones del jugador con el escudo
+        private void VerificarColisionConEscudo()
+        {
+            for (int i = escudos.Count - 1; i >= 0; i--)
+            {
+                if (jugadorMoto.Bounds.IntersectsWith(escudos[i].Bounds))
+                {
+                    // Hacer al jugador inmune
+                    esInmune = true;
+
+                    // Eliminar el escudo del mapa
+                    this.Controls.Remove(escudos[i]);
+                    escudos.RemoveAt(i);
+
+                    // Iniciar un timer para la duración de la inmunidad
+                    var duracionInmunidadTimer = new System.Windows.Forms.Timer();
+                    duracionInmunidadTimer.Interval = 10000; // Duración de la inmunidad en milisegundos (ejemplo: 10 segundos)
+                    duracionInmunidadTimer.Tick += (s, e) =>
+                    {
+                        esInmune = false;
+                        duracionInmunidadTimer.Stop();
+                        duracionInmunidadTimer.Dispose();
+                    };
+                    duracionInmunidadTimer.Start();
+                }
+            }
+        }
+
+
+
 
 
 
@@ -226,28 +342,131 @@ namespace Tron
 
 
 
+
+
+
+
+        
+
+        // Modificar la función ConsumirCombustible para que dependa de la velocidad
+        private void ConsumirCombustible()
+        {
+            // Reducir la cantidad de combustible según la velocidad del enemigo
+            cantidadCombustible -= enemigoVelocidad;
+
+            // Actualizar el ancho de la barra de combustible
+            barraCombustible.Width = (int)(200 * (cantidadCombustible / 100.0));
+
+            // Verificar si se acabó el combustible
+            if (cantidadCombustible <= 0)
+            {
+                cantidadCombustible = 0;
+                GameOver(); // Llamar a la función que muestra el mensaje de 'Game Over'
+            }
+        }
+
+        private bool juegoTerminado = false; // Variable para controlar si el juego ya ha terminado
+
+        private void GameOver()
+        {
+            if (!juegoTerminado) // Solo ejecutar si el juego no ha terminado
+            {
+                juegoTerminado = true; // Marcar el juego como terminado
+
+                // Mostrar el mensaje de 'Game Over' sin cerrar la aplicación abruptamente
+                MessageBox.Show("Game Over");
+
+                // Detener todos los temporizadores del juego
+                enemigoMovimientoTimer.Stop();
+                cambioDireccionTimer.Stop();
+                fuegoTimer.Stop();
+                juegoTimer.Stop();
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Lista para almacenar las gasolinas en el mapa
+        private List<PictureBox> gasolinas = new List<PictureBox>();
+
+        // Método para colocar gasolina en el mapa
+        // Método para colocar gasolina en el mapa
         private void ColocarGasolina()
         {
             PictureBox gasolina = new PictureBox();
             gasolina.Image = Image.FromFile("Gasolina.png"); // Ruta de la imagen de gasolina
             gasolina.SizeMode = PictureBoxSizeMode.StretchImage;
-            gasolina.Size = new Size(20, 20); // Ajusta el tamaño según sea necesario
+            gasolina.Size = new Size(20, 20);
 
             // Colocar en una ubicación aleatoria
             gasolina.Location = new Point(random.Next(0, this.ClientSize.Width - gasolina.Width), random.Next(0, this.ClientSize.Height - gasolina.Height));
 
             this.Controls.Add(gasolina);
+            gasolinas.Add(gasolina); // Añadir la gasolina a la lista
 
-            // Timer para eliminar la gasolina después de un tiempo si no se recoge
+            // Temporizador para eliminar la gasolina después de 10 segundos
             var eliminarGasolinaTimer = new System.Windows.Forms.Timer();
-            eliminarGasolinaTimer.Interval = 10000; // 10 segundos, ajusta este valor según sea necesario
+            eliminarGasolinaTimer.Interval = 10000;
             eliminarGasolinaTimer.Tick += (s, e) =>
             {
-                this.Controls.Remove(gasolina);
+                if (this.Controls.Contains(gasolina)) // Verifica si la gasolina todavía está en el mapa
+                {
+                    this.Controls.Remove(gasolina);
+                    gasolinas.Remove(gasolina); // Eliminar de la lista también
+                }
                 eliminarGasolinaTimer.Stop();
                 eliminarGasolinaTimer.Dispose();
             };
             eliminarGasolinaTimer.Start();
+        }
+
+
+
+        // Método para verificar colisiones del jugador con gasolina
+        private void VerificarColisionConGasolina()
+        {
+            for (int i = gasolinas.Count - 1; i >= 0; i--)
+            {
+                if (jugadorMoto.Bounds.IntersectsWith(gasolinas[i].Bounds))
+                {
+                    // Aumentar la cantidad de combustible al máximo
+                    cantidadCombustible = 100;
+
+                    // Ajustar el ancho de la barra de combustible
+                    barraCombustible.Width = 200;
+
+                    // Eliminar la gasolina del mapa
+                    this.Controls.Remove(gasolinas[i]);
+                    gasolinas.RemoveAt(i);
+                }
+            }
+        }
+
+
+
+
+        // Este método debe llamarse en cada actualización del juego, por ejemplo, dentro de un Timer o un bucle
+        private void ActualizarJuego()
+        {
+            VerificarColisionConGasolina();
+            VerificarColisionConEscudo();
+            // Otras actualizaciones del juego
         }
 
 
@@ -361,6 +580,8 @@ namespace Tron
             }
 
             MoverJugador(); // Asegúrate de que el jugador se mueve en cada tick
+            ActualizarJuego(); // Llamar a ActualizarJuego para verificar colisiones de gasolina y otros eventos
+
 
             enemigosAEliminar = enemigosAEliminar.Distinct().ToList();
             enemigosAEliminar.Sort((a, b) => b.CompareTo(a));
@@ -378,6 +599,27 @@ namespace Tron
             this.Invalidate();
         }
 
+
+
+
+        // Método para inicializar la velocidad aleatoria de los enemigos y la moto
+        private void InicializarVelocidadAleatoria()
+        {
+            Random random = new Random();
+            enemigoVelocidad = random.Next(1, 11); // Velocidad aleatoria entre 1 y 10
+        }
+
+        // Método para colocar el item de velocidad en el mapa
+        private void ColocarItemVelocidad()
+        {
+            Velocidad velocidadItem = new Velocidad(this, itemsVelocidad);
+        }
+
+
+
+
+
+        // Modificar el método MoverJugador para incluir la verificación de colisión con el item de velocidad
         private void MoverJugador()
         {
             Point posicionAnterior = jugadorMoto.Location;
@@ -399,8 +641,11 @@ namespace Tron
 
                 List<PictureBox> enemigosAEliminar = new List<PictureBox>();
                 List<PictureBox> llamasAEliminar = new List<PictureBox>();
-                List<PictureBox> bombasAEliminar = new List<PictureBox>(); // Lista para bombas
+                List<PictureBox> bombasAEliminar = new List<PictureBox>();
+                List<PictureBox> escudosAEliminar = new List<PictureBox>();
+                List<PictureBox> velocidadAEliminar = new List<PictureBox>(); // Lista para eliminar el item de velocidad
 
+                // Verificar colisión con enemigos
                 foreach (var enemigo in enemigos)
                 {
                     if (jugadorMoto.Bounds.IntersectsWith(enemigo.Bounds))
@@ -409,6 +654,7 @@ namespace Tron
                     }
                 }
 
+                // Verificar colisión con llamas
                 foreach (var llama in llamas)
                 {
                     if (!llamasRecientes.Contains(llama) && jugadorMoto.Bounds.IntersectsWith(llama.Bounds))
@@ -417,56 +663,101 @@ namespace Tron
                     }
                 }
 
-                foreach (var bomba in bombas) // Verificar colisión con bombas
+                // Verificar colisión con bombas
+                foreach (var bomba in bombas)
                 {
                     if (jugadorMoto.Bounds.IntersectsWith(bomba.Bounds))
                     {
-                        // Detener todos los temporizadores
+                        if (!esInmune)
+                        {
+                            enemigoMovimientoTimer.Stop();
+                            cambioDireccionTimer.Stop();
+                            fuegoTimer.Stop();
+                            juegoTimer.Stop();
+
+                            bombasAEliminar.Add(bomba);
+
+                            MessageBox.Show("¡Bomba explotada! Fin del juego.");
+                            Application.Exit();
+                            return;
+                        }
+                    }
+                }
+
+                // Verificar colisión con escudos
+                foreach (var escudo in escudos)
+                {
+                    if (jugadorMoto.Bounds.IntersectsWith(escudo.Bounds))
+                    {
+                        esInmune = true;
+                        escudosAEliminar.Add(escudo);
+
+                        var duracionInmunidadTimer = new System.Windows.Forms.Timer();
+                        duracionInmunidadTimer.Interval = 10000;
+                        duracionInmunidadTimer.Tick += (s, e) =>
+                        {
+                            esInmune = false;
+                            duracionInmunidadTimer.Stop();
+                            duracionInmunidadTimer.Dispose();
+                        };
+                        duracionInmunidadTimer.Start();
+                    }
+                }
+
+                // Verificar colisión con el item de velocidad
+                foreach (var velocidad in itemsVelocidad)
+                {
+                    if (jugadorMoto.Bounds.IntersectsWith(velocidad.Bounds))
+                    {
+                        enemigoVelocidad += 2; // Aumentar la velocidad de la moto
+                        velocidadAEliminar.Add(velocidad);
+                    }
+                }
+
+                // Eliminar enemigos, llamas y bombas colisionadas
+                if (enemigosAEliminar.Count > 0 || llamasAEliminar.Count > 0 || bombasAEliminar.Count > 0)
+                {
+                    if (!esInmune)
+                    {
                         enemigoMovimientoTimer.Stop();
                         cambioDireccionTimer.Stop();
                         fuegoTimer.Stop();
                         juegoTimer.Stop();
 
-                        bombasAEliminar.Add(bomba);
+                        foreach (var enemigo in enemigosAEliminar)
+                        {
+                            this.Controls.Remove(enemigo);
+                            enemigos.Remove(enemigo);
+                        }
 
-                        // Mostrar un solo mensaje
-                        MessageBox.Show("¡Bomba explotada! Fin del juego.");
+                        foreach (var llama in llamasAEliminar)
+                        {
+                            this.Controls.Remove(llama);
+                            llamas.Remove(llama);
+                        }
 
-                        // Cerrar la aplicación, puedes reemplazarlo con la lógica que prefieras
+                        foreach (var bomba in bombasAEliminar)
+                        {
+                            this.Controls.Remove(bomba);
+                            bombas.Remove(bomba);
+                        }
+
                         Application.Exit();
-
-                        return; // Salir de la función para evitar mostrar múltiples mensajes
                     }
                 }
 
-                if (enemigosAEliminar.Count > 0 || llamasAEliminar.Count > 0 || bombasAEliminar.Count > 0)
+                // Eliminar escudos recogidos
+                foreach (var escudo in escudosAEliminar)
                 {
-                    // Detener el juego y mostrar un solo mensaje de colisión
-                    enemigoMovimientoTimer.Stop();
-                    cambioDireccionTimer.Stop();
-                    fuegoTimer.Stop();
-                    juegoTimer.Stop();
+                    this.Controls.Remove(escudo);
+                    escudos.Remove(escudo);
+                }
 
-                    // Eliminar enemigos, llamas y bombas colisionadas
-                    foreach (var enemigo in enemigosAEliminar)
-                    {
-                        this.Controls.Remove(enemigo);
-                        enemigos.Remove(enemigo);
-                    }
-
-                    foreach (var llama in llamasAEliminar)
-                    {
-                        this.Controls.Remove(llama);
-                        llamas.Remove(llama);
-                    }
-
-                    foreach (var bomba in bombasAEliminar)
-                    {
-                        this.Controls.Remove(bomba);
-                        bombas.Remove(bomba);
-                    }
-
-                    Application.Exit(); // Cerrar la aplicación
+                // Eliminar el item de velocidad si se recogió
+                foreach (var velocidad in velocidadAEliminar)
+                {
+                    this.Controls.Remove(velocidad);
+                    itemsVelocidad.Remove(velocidad);
                 }
             }
         }
@@ -501,40 +792,44 @@ namespace Tron
             // Verifica la dirección actual del jugador
             if (direccionJugador.X == 1 && direccionJugador.Y == 0) // Derecha
             {
-                if (e.KeyCode == Keys.Left) // No permitir moverse a la izquierda
+                if (e.KeyCode == Keys.Left || e.KeyCode == Keys.A) // No permitir moverse a la izquierda
                     return;
             }
             else if (direccionJugador.X == -1 && direccionJugador.Y == 0) // Izquierda
             {
-                if (e.KeyCode == Keys.Right) // No permitir moverse a la derecha
+                if (e.KeyCode == Keys.Right || e.KeyCode == Keys.D) // No permitir moverse a la derecha
                     return;
             }
             else if (direccionJugador.X == 0 && direccionJugador.Y == 1) // Abajo
             {
-                if (e.KeyCode == Keys.Up) // No permitir moverse hacia arriba
+                if (e.KeyCode == Keys.Up || e.KeyCode == Keys.W) // No permitir moverse hacia arriba
                     return;
             }
             else if (direccionJugador.X == 0 && direccionJugador.Y == -1) // Arriba
             {
-                if (e.KeyCode == Keys.Down) // No permitir moverse hacia abajo
+                if (e.KeyCode == Keys.Down || e.KeyCode == Keys.S) // No permitir moverse hacia abajo
                     return;
             }
 
             switch (e.KeyCode)
             {
                 case Keys.Up:
+                case Keys.W:
                     direccionJugador = new Point(0, -1);
                     jugadorMoto.Image = Image.FromFile("moto_arriba.png");
                     break;
                 case Keys.Down:
+                case Keys.S:
                     direccionJugador = new Point(0, 1);
                     jugadorMoto.Image = Image.FromFile("moto_abajo.png");
                     break;
                 case Keys.Left:
+                case Keys.A:
                     direccionJugador = new Point(-1, 0);
                     jugadorMoto.Image = Image.FromFile("moto_izquierda.png");
                     break;
                 case Keys.Right:
+                case Keys.D:
                     direccionJugador = new Point(1, 0);
                     jugadorMoto.Image = Image.FromFile("moto_derecha.png");
                     break;
@@ -591,11 +886,14 @@ namespace Tron
 
         private void InitializeComponent()
         {
-            this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(284, 261);
-            this.Name = "Ventana";
-            this.Load += new System.EventHandler(this.Ventana_Load);
-            this.ResumeLayout(false);
+            SuspendLayout();
+            // 
+            // Ventana
+            // 
+            ClientSize = new Size(306, 261);
+            Name = "Ventana";
+            Load += Ventana_Load;
+            ResumeLayout(false);
         }
 
         private void Ventana_Load(object sender, EventArgs e)
